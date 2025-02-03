@@ -5,6 +5,7 @@ import {
   inputFS,
   overlayFS,
   run,
+  fsFixture,
 } from '@parcel/test-utils';
 import assert from 'assert';
 import path from 'path';
@@ -90,7 +91,7 @@ console.log('adding a new console');`,
             result.bundleGraph.getBundles()[0].filePath,
             'utf8',
           );
-          assert(contents.includes(`console.log("adding a new console")`));
+          assert(contents.includes(`console.log('adding a new console')`));
         } finally {
           if (subscription) {
             await subscription.unsubscribe();
@@ -132,7 +133,7 @@ console.log('adding a new console');`,
             result.bundleGraph.getBundles()[0].filePath,
             'utf8',
           );
-          assert(contents.includes(`console.log("adding a new console")`));
+          assert(contents.includes(`console.log('adding a new console')`));
         } finally {
           if (subscription) {
             await subscription.unsubscribe();
@@ -174,7 +175,7 @@ console.log('adding a new console');`,
             result.bundleGraph.getBundles()[0].filePath,
             'utf8',
           );
-          assert(contents.includes(`console.log("adding a new console")`));
+          assert(contents.includes(`console.log('adding a new console')`));
         } finally {
           if (subscription) {
             await subscription.unsubscribe();
@@ -217,7 +218,7 @@ console.log(a);
             'utf8',
           );
           assert(
-            contents.includes(`console.log("index.js - updated string");`),
+            contents.includes(`console.log('index.js - updated string');`),
           );
         } finally {
           if (subscription) {
@@ -308,7 +309,7 @@ module.exports = a;`,
             'utf8',
           );
 
-          assert(contents.includes(`console.log("adding a new console")`));
+          assert(contents.includes(`console.log('adding a new console')`));
 
           let bundleOutput = await run(result.bundleGraph);
           assert.equal(bundleOutput, 'a updated');
@@ -404,7 +405,7 @@ console.log(a, 'updated');`,
           'utf8',
         );
 
-        assert(contents.includes(`console.log((0, _a.a), "updated");`));
+        assert(contents.includes(`console.log((0, _a.a), 'updated');`));
 
         let bundleCSS = result.bundleGraph.getBundles()[1];
         assert.equal(bundleCSS.type, 'css');
@@ -483,31 +484,28 @@ console.log(a);`,
         await overlayFS.mkdirp(fixture);
         subscription = await b.watch();
 
-        let event = await getNextBuildSuccess(b);
+        await getNextBuildSuccess(b);
         assertTimesBundled(defaultBundlerSpy.callCount, 1);
 
         await overlayFS.writeFile(
           path.join(fixture, 'index.js'),
-          `import a from './a';
-import b from './b';
+          `import {a} from './a';
+import {b} from './b';
 console.log('index.js', b);
 console.log(a);
 `,
         );
 
-        event = await getNextBuildSuccess(b);
+        let event = await getNextBuildSuccess(b);
         assertChangedAssets(event.changedAssets.size, 2);
         assertTimesBundled(defaultBundlerSpy.callCount, 2);
 
-        let result = await b.run();
         let contents = await overlayFS.readFile(
-          result.bundleGraph.getBundles()[0].filePath,
+          event.bundleGraph.getBundles()[0].filePath,
           'utf8',
         );
 
-        assert(
-          contents.includes(`console.log("index.js", (0, _bDefault.default));`),
-        );
+        assert(contents.includes(`console.log('index.js', (0, _b.b));`));
       } finally {
         if (subscription) {
           await subscription.unsubscribe();
@@ -529,34 +527,32 @@ console.log(a);
         await overlayFS.mkdirp(fixture);
         subscription = await b.watch();
 
-        let event = await getNextBuildSuccess(b);
+        await getNextBuildSuccess(b);
         assertTimesBundled(defaultBundlerSpy.callCount, 1);
 
         await overlayFS.writeFile(
           path.join(fixture, 'index.js'),
-          `import a from './a';
+          `import {a} from './a';
 import './a.css';
 console.log(a);
 `,
         );
 
-        event = await getNextBuildSuccess(b);
+        let event = await getNextBuildSuccess(b);
         assertChangedAssets(event.changedAssets.size, 2);
         assertTimesBundled(defaultBundlerSpy.callCount, 2);
 
-        let result = await b.run();
-
         // one CSS and one JS bundle
-        assert.equal(result.bundleGraph.getBundles().length, 2);
+        assert.equal(event.bundleGraph.getBundles().length, 2);
 
         let contents = await overlayFS.readFile(
-          result.bundleGraph.getBundles()[0].filePath,
+          event.bundleGraph.getBundles()[0].filePath,
           'utf8',
         );
 
-        assert(contents.includes(`console.log((0, _aDefault.default));`));
+        assert(contents.includes(`console.log((0, _a.a));`));
 
-        let bundleCSS = result.bundleGraph.getBundles()[1];
+        let bundleCSS = event.bundleGraph.getBundles()[1];
         assert.equal(bundleCSS.type, 'css');
 
         let cssContent = await overlayFS.readFile(bundleCSS.filePath, 'utf8');
@@ -582,35 +578,33 @@ console.log(a);
         await overlayFS.mkdirp(fixture);
         subscription = await b.watch();
 
-        let event = await getNextBuildSuccess(b);
+        await getNextBuildSuccess(b);
         assertTimesBundled(defaultBundlerSpy.callCount, 1);
 
         await overlayFS.writeFile(
           path.join(fixture, 'index.js'),
-          `import a from './a';
+          `import {a} from './a';
 const b = import('./b');
-console.log(a);
+console.log(a, b);
 `,
         );
 
-        event = await getNextBuildSuccess(b);
+        let event = await getNextBuildSuccess(b);
         let assets = Array.from(event.changedAssets.values());
         assertChangedAssets(getChangedAssetsBeforeRuntimes(assets).length, 2);
         assertTimesBundled(defaultBundlerSpy.callCount, 2);
 
-        let result = await b.run();
-
         // original bundle and new dynamic import bundle JS bundle
-        assert.equal(result.bundleGraph.getBundles().length, 2);
+        assert.equal(event.bundleGraph.getBundles().length, 2);
 
         let contents = await overlayFS.readFile(
-          result.bundleGraph.getBundles()[0].filePath,
+          event.bundleGraph.getBundles()[0].filePath,
           'utf8',
         );
 
-        assert(contents.includes(`console.log((0, _aDefault.default));`));
+        assert(contents.includes(`console.log((0, _a.a), b);`));
 
-        let dynamicBundle = result.bundleGraph.getBundles()[1];
+        let dynamicBundle = event.bundleGraph.getBundles()[1];
         assert.equal(dynamicBundle.type, 'js');
 
         let dynamicContent = await overlayFS.readFile(
@@ -619,7 +613,7 @@ console.log(a);
         );
         assert(
           dynamicContent.includes(`parcelHelpers.export(exports, "b", ()=>b);
-const b = "b";`),
+const b = 'b';`),
         );
       } finally {
         if (subscription) {
@@ -719,21 +713,33 @@ console.log('index.js');`,
 
     it('changing bundler options', async () => {
       let subscription;
-      let fixture = path.join(__dirname, '/integration/incremental-bundling');
       try {
-        let b = bundler(path.join(fixture, 'index.js'), {
+        await fsFixture(overlayFS, __dirname)`
+          index.js:
+            export default 1;
+
+          package.json:
+            {
+              "@parcel/bundler-default": {
+                "http": 2
+              }
+            }
+
+          yarn.lock:`;
+
+        let b = bundler(path.join(__dirname, 'index.js'), {
           inputFS: overlayFS,
           shouldDisableCache: false,
           shouldBundleIncrementally: true,
         });
 
-        await overlayFS.mkdirp(fixture);
+        await overlayFS.mkdirp(__dirname);
         subscription = await b.watch();
 
         let event = await getNextBuildSuccess(b);
         assertTimesBundled(defaultBundlerSpy.callCount, 1);
 
-        let pkgFile = path.join(fixture, 'package.json');
+        let pkgFile = path.join(__dirname, 'package.json');
         let pkg = JSON.parse(await overlayFS.readFile(pkgFile));
         await overlayFS.writeFile(
           pkgFile,
@@ -748,7 +754,7 @@ console.log('index.js');`,
         event = await getNextBuildSuccess(b);
 
         // should contain all the assets
-        assertChangedAssets(event.changedAssets.size, 3);
+        assertChangedAssets(event.changedAssets.size, 2);
         assertTimesBundled(defaultBundlerSpy.callCount, 2);
       } finally {
         if (subscription) {
@@ -1002,7 +1008,7 @@ console.log('index.js');`,
 
 console.log('index.js');
 console.log(a);
-module.exports = {a};
+module.exports = {a}
 `,
       );
 
